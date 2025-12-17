@@ -1,30 +1,38 @@
+# WordPress on Amazon EKS
+# Update the following values before deploying:
+# - volumeHandle: Your EFS File System ID and Access Point ID
+# - WORDPRESS_DB_HOST: Your RDS endpoint
+# - Secret password: Base64 encoded database password
+---
 apiVersion: v1
-kind: Service
+kind: Secret
 metadata:
-  name: wordpress
+  name: wordpress-db-secret
   labels:
     app: wordpress
-spec:
-  ports:
-    - port: 80
-  selector:
-    app: wordpress
-    tier: frontend
-  type: LoadBalancer
+type: Opaque
+data:
+  # Generate with: echo -n 'your-password' | base64
+  password: Q0hBTkdFX01FX0JBU0U2NA==
 ---
-kind: StorageClass
 apiVersion: storage.k8s.io/v1
+kind: StorageClass
 metadata:
   name: efs-sc
 provisioner: efs.csi.aws.com
+parameters:
+  provisioningMode: efs-ap
+  directoryPerms: "700"
 ---
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: efs-pv
+  name: wordpress-efs-pv
+  labels:
+    app: wordpress
 spec:
   capacity:
-    storage: 5Gi
+    storage: 10Gi
   volumeMode: Filesystem
   accessModes:
     - ReadWriteMany
@@ -32,18 +40,10 @@ spec:
   storageClassName: efs-sc
   csi:
     driver: efs.csi.aws.com
-    volumeHandle: fs-0ffe49290ecd769ce::fsap-03e30abc7ae24131d
+    # Format: <EFS-FILE-SYSTEM-ID>::<ACCESS-POINT-ID>
+    volumeHandle: fs-XXXXXXXXX::fsap-XXXXXXXXX
     volumeAttributes:
-      encryptInTransit: "false"
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: moore-wp-creds
-type: Opaque
-data:
-  password: TEtTTkNDMjAyMw==
-
+      encryptInTransit: "true"
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -57,15 +57,32 @@ spec:
   storageClassName: efs-sc
   resources:
     requests:
-      storage: 5Gi
+      storage: 10Gi
 ---
-apiVersion: apps/v1 
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+  labels:
+    app: wordpress
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+  selector:
+    app: wordpress
+    tier: frontend
+---
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: wordpress
   labels:
     app: wordpress
 spec:
+  replicas: 1
   selector:
     matchLabels:
       app: wordpress
@@ -79,25 +96,51 @@ spec:
         tier: frontend
     spec:
       containers:
-      - image: wordpress:php7.1-apache
-        name: wordpress
-        env:
-        - name: WORDPRESS_DB_HOST
-          value: moore-rds-db.cluster-ckswdd9ny3nw.ap-southeast-1.rds.amazonaws.com
-        - name: WORDPRESS_DB_USER
-          value: admin
-        - name: WORDPRESS_DB_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: moore-wp-creds
-              key: password
-        ports:
-        - containerPort: 80
-          name: wordpress
-        volumeMounts:
-        - name: wordpress-persistent-storage
-          mountPath: /var/www/html
+        - name: wordpress
+          image: wordpress:6.7-apache
+          ports:
+            - containerPort: 80
+              name: http
+          env:
+            - name: WORDPRESS_DB_HOST
+              # Update with your RDS endpoint
+              value: "your-rds-endpoint.rds.amazonaws.com"
+            - name: WORDPRESS_DB_USER
+              value: "admin"
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: wordpress-db-secret
+                  key: password
+            - name: WORDPRESS_DB_NAME
+              value: "wordpress"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /wp-includes/images/blank.gif
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /wp-includes/images/blank.gif
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: wordpress-persistent-storage
+              mountPath: /var/www/html
       volumes:
-      - name: wordpress-persistent-storage
-        persistentVolumeClaim:
-          claimName: wordpress-efs-pvc
+        - name: wordpress-persistent-storage
+          persistentVolumeClaim:
+            claimName: wordpress-efs-pvc
