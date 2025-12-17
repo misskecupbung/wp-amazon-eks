@@ -21,7 +21,7 @@ Deploy WordPress on Amazon Elastic Kubernetes Service (EKS) with Amazon EFS for 
 
 ### Linux
 
-\`\`\`bash
+```bash
 # Install AWS CLI
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 unzip awscliv2.zip
@@ -42,11 +42,11 @@ kubectl version --client
 curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
 chmod 700 get_helm.sh
 ./get_helm.sh
-\`\`\`
+```
 
 ### macOS
 
-\`\`\`bash
+```bash
 # Install AWS CLI
 brew install awscli
 aws --version
@@ -62,11 +62,11 @@ kubectl version --client
 
 # Install Helm
 brew install helm
-\`\`\`
+```
 
 ## Configure AWS Access
 
-\`\`\`bash
+```bash
 # Configure AWS credentials
 aws configure
 
@@ -75,11 +75,11 @@ aws eks update-kubeconfig --region <REGION> --name <CLUSTER_NAME>
 
 # Verify cluster access
 kubectl get nodes
-\`\`\`
+```
 
 ## Install EFS CSI Driver
 
-\`\`\`bash
+```bash
 # Add the EFS CSI driver Helm repository
 helm repo add aws-efs-csi-driver https://kubernetes-sigs.github.io/aws-efs-csi-driver/
 helm repo update
@@ -87,7 +87,7 @@ helm repo update
 # Install the driver
 helm upgrade --install aws-efs-csi-driver aws-efs-csi-driver/aws-efs-csi-driver \
   --namespace kube-system
-\`\`\`
+```
 
 ## Deploy WordPress
 
@@ -104,13 +104,13 @@ Before deploying, update the following values in `wordpress-eks.yaml`:
 
 ### 2. Apply Kubernetes Manifests
 
-\`\`\`bash
+```bash
 kubectl apply -f wordpress-eks.yaml
-\`\`\`
+```
 
 ### 3. Verify Deployment
 
-\`\`\`bash
+```bash
 # Check pod status
 kubectl get pods -l app=wordpress
 
@@ -119,23 +119,23 @@ kubectl get svc wordpress
 
 # View logs
 kubectl logs -l app=wordpress -f
-\`\`\`
+```
 
 ### 4. Access WordPress
 
 Get the LoadBalancer URL:
 
-\`\`\`bash
+```bash
 kubectl get svc wordpress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
-\`\`\`
+```
 
 Open the URL in your browser to complete the WordPress installation.
 
 ## Cleanup
 
-\`\`\`bash
+```bash
 kubectl delete -f wordpress-eks.yaml
-\`\`\`
+```
 
 ## Troubleshooting
 
